@@ -1,7 +1,10 @@
 import { Router } from "express";
 import { profile } from "./user.service.js";
 import { createUserService } from "./user.service.js";
-import { successResponse } from "../../common/utils/index.js";
+import {
+  successResponse,
+  errorResponse,
+} from "../../common/utils/response/index.js";
 import { UserModel } from "../../DB/model/user.model.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
@@ -11,18 +14,17 @@ export const signup = async (req, res) => {
   try {
     const user = await createUserService(req.body);
 
-    res.status(201).json({
-      message: "User registered successfully",
+    return successResponse(res, "User registered successfully", 201, {
       userId: user._id,
     });
   } catch (error) {
     console.error("SIGNUP ERROR 👉", error);
 
     if (error.message === "EMAIL_EXISTS") {
-      return res.status(409).json({ message: "Email already exists" });
+      return errorResponse(res, "Email already exists", 409);
     }
 
-    res.status(500).json({ message: "Signup failed" });
+    return errorResponse(res, "Signup failed", 500, error.message);
   }
 };
 export const login = async (req, res) => {
@@ -31,35 +33,31 @@ export const login = async (req, res) => {
 
     const user = await UserModel.findOne({ email });
     if (!user) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return errorResponse(res, "Invalid email or password", 401);
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return errorResponse(res, "Invalid email or password", 401);
     }
 
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
       expiresIn: "1h",
     });
 
-    res.json({
-      message: "Login successful",
-      token,
-    });
+    return successResponse(res, "Login successful", 200, { token });
   } catch (error) {
-    res.status(500).json({ message: "Login failed" });
     console.log(error);
+    return errorResponse(res, "Login failed", 500, error.message);
   }
 };
 
 export const updateUser = async (req, res) => {
   try {
-
     const { email, password, ...updates } = req.body || {};
 
     if (password) {
-      return res.status(400).json({ message: "Password cannot be updated" });
+      return errorResponse(res, "Password cannot be updated", 400);
     }
 
     const user = await UserModel.findByIdAndUpdate(req.userId, updates, {
@@ -67,13 +65,13 @@ export const updateUser = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return errorResponse(res, "User not found", 404);
     }
 
-    return res.json({ message: "User updated successfully" });
+    return successResponse(res, "User updated successfully", 200);
   } catch (error) {
     console.error("UPDATE ERROR 👉", error);
-    return res.status(500).json({ message: "Update failed" });
+    return errorResponse(res, "Update failed", 500, error.message);
   }
 };
 export const deleteUser = async (req, res) => {
@@ -83,13 +81,13 @@ export const deleteUser = async (req, res) => {
     const user = await UserModel.findByIdAndDelete(userId);
 
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return errorResponse(res, "User not found", 404);
     }
 
-    return res.json({ message: "User deleted" });
+    return successResponse(res, "User deleted", 200);
   } catch (error) {
     console.error("DELETE ERROR 👉", error);
-    return res.status(500).json({ message: "Delete failed" });
+    return errorResponse(res, "Delete failed", 500, error.message);
   }
 };
 export const getUser = async (req, res) => {
@@ -99,13 +97,13 @@ export const getUser = async (req, res) => {
     const user = await UserModel.findById(userId).select("-password");
 
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return errorResponse(res, "User not found", 404);
     }
 
-    return res.json(user);
+    return successResponse(res, "User fetched successfully", 200, user);
   } catch (error) {
     console.error("GET USER ERROR 👉", error);
-    return res.status(500).json({ message: "Failed to get user" });
+    return errorResponse(res, "Failed to get user", 500, error.message);
   }
 };
 

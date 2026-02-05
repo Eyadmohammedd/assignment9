@@ -1,58 +1,55 @@
 import { NotesModel } from "../../DB/model/Notes.model.js";
 import mongoose from "mongoose";
+import {
+  successResponse,
+  errorResponse,
+} from "../../common/utils/response/index.js";
 
-export const createNote = async (req, res, next) => {
+export const createNote = async (req, res) => {
   try {
     const { title, content } = req.body;
     const userId = req.userId;
+
     const note = await NotesModel.create({
       title,
       content,
       userId,
     });
 
-    res.json(note);
-
-    return res.status(201).json({
-      message: "Note created successfully",
-      note,
-    });
+    return successResponse(res, "Note created successfully", 201, note);
   } catch (error) {
     console.error("CREATE NOTE ERROR 👉", error);
-    return res.status(500).json({ message: "Failed to create note" });
+    return errorResponse(res, "Failed to create note", 500, error.message);
   }
 };
+
 export const updateNote = async (req, res) => {
   try {
-    const { noteId } = req.params;   
-    const userId = req.userId;       
+    const { noteId } = req.params;
+    const userId = req.userId;
     const updates = req.body || {};
 
     const note = await NotesModel.findById(noteId);
 
     if (!note) {
-      return res.status(404).json({ message: "Note not found" });
+      return errorResponse(res, "Note not found", 404);
     }
 
     if (note.userId.toString() !== userId) {
-      return res.status(403).json({ message: "Not authorized" });
+      return errorResponse(res, "Not authorized", 403);
     }
 
-    const updatedNote = await NotesModel.findByIdAndUpdate(
-      noteId,
-      updates,
-      { new: true }
-    );
-
-    return res.json({
-      message: "Note updated successfully",
-      note: updatedNote,
+    const updatedNote = await NotesModel.findByIdAndUpdate(noteId, updates, {
+      new: true,
     });
+
+    return successResponse(res, "Note updated successfully", 200, updatedNote);
   } catch (error) {
     console.error("UPDATE NOTE ERROR 👉", error);
-    return res.status(500).json({ message: "Update failed" });
+    return errorResponse(res, "Update failed", 500, error.message);
   }
 };
+
 export const replaceNote = async (req, res) => {
   try {
     const { noteId } = req.params;
@@ -61,57 +58,51 @@ export const replaceNote = async (req, res) => {
     const note = await NotesModel.findById(noteId);
 
     if (!note) {
-      return res.status(404).json({ message: "Note not found" });
+      return errorResponse(res, "Note not found", 404);
     }
 
     if (note.userId.toString() !== userId) {
-      return res.status(403).json({ message: "Not authorized" });
+      return errorResponse(res, "Not authorized", 403);
     }
 
     const replacedNote = await NotesModel.findOneAndReplace(
       { _id: noteId },
-      {
-        ...req.body,        
-        userId: note.userId 
-      },
-      { new: true }
+      { ...req.body, userId: note.userId },
+      { new: true },
     );
 
-    return res.json({
-      message: "Note replaced successfully",
-      note: replacedNote,
-    });
+    return successResponse(
+      res,
+      "Note replaced successfully",
+      200,
+      replacedNote,
+    );
   } catch (error) {
     console.error("REPLACE NOTE ERROR 👉", error);
-    return res.status(500).json({ message: "Replace failed" });
+    return errorResponse(res, "Replace failed", 500, error.message);
   }
 };
+
 export const UpdateALLNote = async (req, res) => {
   try {
-    const userId = req.userId;       
-   const { title } = req.body;  
-   
+    const userId = req.userId;
+    const { title } = req.body;
+
     if (!title) {
-      return res.status(400).json({
-        message: "Title is required",
-      });
+      return errorResponse(res, "Title is required", 400);
     }
 
-   const result = await NotesModel.updateMany(
-      { userId },                        
-      { $set: { title } }              
-    );
-      return res.json({
-      message: "All notes titles updated successfully",
+    const result = await NotesModel.updateMany({ userId }, { $set: { title } });
+
+    return successResponse(res, "All notes titles updated successfully", 200, {
       modifiedCount: result.modifiedCount,
     });
   } catch (error) {
     console.error("UPDATE ALL NOTES ERROR 👉", error);
-    console.log(Error);
-    
-    return res.status(500).json({ message: "Update all notes failed" });
+    return errorResponse(res, "Update all notes failed", 500, error.message);
   }
-};           
+};
+
 export const deleteNote = async (req, res) => {
   try {
     const { noteId } = req.params;
@@ -120,40 +111,35 @@ export const deleteNote = async (req, res) => {
     const note = await NotesModel.findById(noteId);
 
     if (!note) {
-      return res.status(404).json({ message: "Note not found" });
+      return errorResponse(res, "Note not found", 404);
     }
 
-    // owner check
     if (note.userId.toString() !== userId) {
-      return res.status(403).json({ message: "Not authorized" });
+      return errorResponse(res, "Not authorized", 403);
     }
 
     const deletedNote = await NotesModel.findByIdAndDelete(noteId);
 
-    return res.json({
-      message: "Note deleted successfully",
-      note: deletedNote,
-    });
+    return successResponse(res, "Note deleted successfully", 200, deletedNote);
   } catch (error) {
     console.error("DELETE NOTE ERROR 👉", error);
-    return res.status(500).json({ message: "Delete failed" });
+    return errorResponse(res, "Delete failed", 500, error.message);
   }
 };
+
 export const getNotesPaginatedSorted = async (req, res) => {
   try {
     const userId = req.userId;
-
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 5;
-
     const skip = (page - 1) * limit;
 
     const notes = await NotesModel.find({ userId })
-      .sort({ createdAt: -1 })   // 👈 DESC
+      .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
 
-    return res.json({
+    return successResponse(res, "Notes fetched successfully", 200, {
       page,
       limit,
       count: notes.length,
@@ -161,9 +147,10 @@ export const getNotesPaginatedSorted = async (req, res) => {
     });
   } catch (error) {
     console.error("PAGINATE NOTES ERROR 👉", error);
-    return res.status(500).json({ message: "Failed to get notes" });
+    return errorResponse(res, "Failed to get notes", 500, error.message);
   }
 };
+
 export const getNoteById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -172,43 +159,42 @@ export const getNoteById = async (req, res) => {
     const note = await NotesModel.findById(id);
 
     if (!note) {
-      return res.status(404).json({ message: "Note not found" });
+      return errorResponse(res, "Note not found", 404);
     }
 
     if (note.userId.toString() !== userId) {
-      return res.status(403).json({ message: "Not authorized" });
+      return errorResponse(res, "Not authorized", 403);
     }
 
-    return res.json({ note });
+    return successResponse(res, "Note fetched successfully", 200, note);
   } catch (error) {
     console.error("GET NOTE ERROR 👉", error);
-    return res.status(500).json({ message: "Failed to get note" });
+    return errorResponse(res, "Failed to get note", 500, error.message);
   }
 };
+
 export const getNoteByContent = async (req, res) => {
   try {
     const userId = req.userId;
     const { content } = req.query;
 
     if (!content) {
-      return res.status(400).json({ message: "Content query is required" });
+      return errorResponse(res, "Content query is required", 400);
     }
 
-    const note = await NotesModel.findOne({
-      userId,
-      content,
-    });
+    const note = await NotesModel.findOne({ userId, content });
 
     if (!note) {
-      return res.status(404).json({ message: "Note not found" });
+      return errorResponse(res, "Note not found", 404);
     }
 
-    return res.json({ note });
+    return successResponse(res, "Note fetched successfully", 200, note);
   } catch (error) {
     console.error("GET NOTE BY CONTENT ERROR 👉", error);
-    return res.status(500).json({ message: "Failed" });
+    return errorResponse(res, "Failed", 500, error.message);
   }
 };
+
 export const getNotesWithUser = async (req, res) => {
   try {
     const userId = req.userId;
@@ -217,10 +203,10 @@ export const getNotesWithUser = async (req, res) => {
       .select("title userId createdAt")
       .populate("userId", "email");
 
-    return res.json({ notes });
+    return successResponse(res, "Notes fetched successfully", 200, notes);
   } catch (error) {
     console.error("GET NOTES WITH USER ERROR 👉", error);
-    return res.status(500).json({ message: "Failed to get notes" });
+    return errorResponse(res, "Failed to get notes", 500, error.message);
   }
 };
 
@@ -229,9 +215,7 @@ export const getNotesAggregate = async (req, res) => {
     const userId = new mongoose.Types.ObjectId(req.userId);
     const { title } = req.query;
 
-    const pipeline = [
-      { $match: { userId } },
-    ];
+    const pipeline = [{ $match: { userId } }];
 
     if (title) {
       pipeline.push({
@@ -257,29 +241,29 @@ export const getNotesAggregate = async (req, res) => {
           "user.name": 1,
           "user.email": 1,
         },
-      }
+      },
     );
 
     const notes = await NotesModel.aggregate(pipeline);
 
-    return res.json({ notes });
+    return successResponse(res, "Notes fetched successfully", 200, notes);
   } catch (error) {
     console.error("AGGREGATE ERROR 👉", error);
-    return res.status(500).json({ message: "Aggregation failed" });
+    return errorResponse(res, "Aggregation failed", 500, error.message);
   }
 };
+
 export const deleteAllNotes = async (req, res) => {
   try {
     const userId = req.userId;
 
     const result = await NotesModel.deleteMany({ userId });
 
-    return res.json({
-      message: "All notes deleted successfully",
+    return successResponse(res, "All notes deleted successfully", 200, {
       deletedCount: result.deletedCount,
     });
   } catch (error) {
     console.error("DELETE ALL NOTES ERROR 👉", error);
-    return res.status(500).json({ message: "Failed to delete notes" });
+    return errorResponse(res, "Failed to delete notes", 500, error.message);
   }
 };
