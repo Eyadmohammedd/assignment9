@@ -1,19 +1,30 @@
-import { NotesModel } from "../../DB/model/Notes.model.js";
 import mongoose from "mongoose";
+import {
+  createNoteService,
+  updateNoteService,
+  replaceNoteService,
+  updateAllNotesService,
+  deleteNoteService,
+  getNotesPaginatedService,
+  getNoteByIdService,
+  getNoteByContentService,
+  getNotesWithUserService,
+  getNotesAggregateService,
+  deleteAllNotesService,
+} from "./notes.service.js";
+
 import {
   successResponse,
   errorResponse,
 } from "../../common/utils/response/index.js";
 
+/* ================= CREATE NOTE ================= */
 export const createNote = async (req, res) => {
   try {
-    const { title, content } = req.body;
-    const userId = req.userId;
-
-    const note = await NotesModel.create({
-      title,
-      content,
-      userId,
+    const note = await createNoteService({
+      title: req.body.title,
+      content: req.body.content,
+      userId: req.userId,
     });
 
     return successResponse(res, "Note created successfully", 201, note);
@@ -23,59 +34,48 @@ export const createNote = async (req, res) => {
   }
 };
 
+/* ================= UPDATE NOTE ================= */
 export const updateNote = async (req, res) => {
   try {
-    const { noteId } = req.params;
-    const userId = req.userId;
-    const updates = req.body || {};
-
-    const note = await NotesModel.findById(noteId);
-
-    if (!note) {
-      return errorResponse(res, "Note not found", 404);
-    }
-
-    if (note.userId.toString() !== userId) {
-      return errorResponse(res, "Not authorized", 403);
-    }
-
-    const updatedNote = await NotesModel.findByIdAndUpdate(noteId, updates, {
-      new: true,
+    const result = await updateNoteService({
+      noteId: req.params.noteId,
+      userId: req.userId,
+      updates: req.body,
     });
 
-    return successResponse(res, "Note updated successfully", 200, updatedNote);
+    if (result === null)
+      return errorResponse(res, "Note not found", 404);
+
+    if (result === "FORBIDDEN")
+      return errorResponse(res, "Not authorized", 403);
+
+    return successResponse(res, "Note updated successfully", 200, result);
   } catch (error) {
     console.error("UPDATE NOTE ERROR 👉", error);
     return errorResponse(res, "Update failed", 500, error.message);
   }
 };
 
+/* ================= REPLACE NOTE ================= */
 export const replaceNote = async (req, res) => {
   try {
-    const { noteId } = req.params;
-    const userId = req.userId;
+    const result = await replaceNoteService({
+      noteId: req.params.noteId,
+      userId: req.userId,
+      body: req.body,
+    });
 
-    const note = await NotesModel.findById(noteId);
-
-    if (!note) {
+    if (result === null)
       return errorResponse(res, "Note not found", 404);
-    }
 
-    if (note.userId.toString() !== userId) {
+    if (result === "FORBIDDEN")
       return errorResponse(res, "Not authorized", 403);
-    }
-
-    const replacedNote = await NotesModel.findOneAndReplace(
-      { _id: noteId },
-      { ...req.body, userId: note.userId },
-      { new: true },
-    );
 
     return successResponse(
       res,
       "Note replaced successfully",
       200,
-      replacedNote,
+      result
     );
   } catch (error) {
     console.error("REPLACE NOTE ERROR 👉", error);
@@ -83,18 +83,20 @@ export const replaceNote = async (req, res) => {
   }
 };
 
-export const UpdateALLNote = async (req, res) => {
+/* ================= UPDATE ALL NOTES ================= */
+export const updateAllNotes = async (req, res) => {
   try {
-    const userId = req.userId;
     const { title } = req.body;
 
-    if (!title) {
+    if (!title)
       return errorResponse(res, "Title is required", 400);
-    }
 
-    const result = await NotesModel.updateMany({ userId }, { $set: { title } });
+    const result = await updateAllNotesService({
+      userId: req.userId,
+      title,
+    });
 
-    return successResponse(res, "All notes titles updated successfully", 200, {
+    return successResponse(res, "All notes updated successfully", 200, {
       modifiedCount: result.modifiedCount,
     });
   } catch (error) {
@@ -103,90 +105,74 @@ export const UpdateALLNote = async (req, res) => {
   }
 };
 
+/* ================= DELETE NOTE ================= */
 export const deleteNote = async (req, res) => {
   try {
-    const { noteId } = req.params;
-    const userId = req.userId;
+    const result = await deleteNoteService({
+      noteId: req.params.noteId,
+      userId: req.userId,
+    });
 
-    const note = await NotesModel.findById(noteId);
-
-    if (!note) {
+    if (result === null)
       return errorResponse(res, "Note not found", 404);
-    }
 
-    if (note.userId.toString() !== userId) {
+    if (result === "FORBIDDEN")
       return errorResponse(res, "Not authorized", 403);
-    }
 
-    const deletedNote = await NotesModel.findByIdAndDelete(noteId);
-
-    return successResponse(res, "Note deleted successfully", 200, deletedNote);
+    return successResponse(res, "Note deleted successfully", 200, result);
   } catch (error) {
     console.error("DELETE NOTE ERROR 👉", error);
     return errorResponse(res, "Delete failed", 500, error.message);
   }
 };
 
+/* ================= PAGINATION + SORT ================= */
 export const getNotesPaginatedSorted = async (req, res) => {
   try {
-    const userId = req.userId;
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 5;
-    const skip = (page - 1) * limit;
-
-    const notes = await NotesModel.find({ userId })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
-
-    return successResponse(res, "Notes fetched successfully", 200, {
-      page,
-      limit,
-      count: notes.length,
-      notes,
+    const notes = await getNotesPaginatedService({
+      userId: req.userId,
+      page: parseInt(req.query.page) || 1,
+      limit: parseInt(req.query.limit) || 5,
     });
+
+    return successResponse(res, "Notes fetched successfully", 200, notes);
   } catch (error) {
-    console.error("PAGINATE NOTES ERROR 👉", error);
+    console.error("PAGINATION ERROR 👉", error);
     return errorResponse(res, "Failed to get notes", 500, error.message);
   }
 };
 
+/* ================= GET NOTE BY ID ================= */
 export const getNoteById = async (req, res) => {
   try {
-    const { id } = req.params;
-    const userId = req.userId;
+    const result = await getNoteByIdService({
+      noteId: req.params.id,
+      userId: req.userId,
+    });
 
-    const note = await NotesModel.findById(id);
-
-    if (!note) {
+    if (result === null)
       return errorResponse(res, "Note not found", 404);
-    }
 
-    if (note.userId.toString() !== userId) {
+    if (result === "FORBIDDEN")
       return errorResponse(res, "Not authorized", 403);
-    }
 
-    return successResponse(res, "Note fetched successfully", 200, note);
+    return successResponse(res, "Note fetched successfully", 200, result);
   } catch (error) {
     console.error("GET NOTE ERROR 👉", error);
     return errorResponse(res, "Failed to get note", 500, error.message);
   }
 };
 
+/* ================= GET NOTE BY CONTENT ================= */
 export const getNoteByContent = async (req, res) => {
   try {
-    const userId = req.userId;
-    const { content } = req.query;
+    const note = await getNoteByContentService({
+      userId: req.userId,
+      content: req.query.content,
+    });
 
-    if (!content) {
-      return errorResponse(res, "Content query is required", 400);
-    }
-
-    const note = await NotesModel.findOne({ userId, content });
-
-    if (!note) {
+    if (!note)
       return errorResponse(res, "Note not found", 404);
-    }
 
     return successResponse(res, "Note fetched successfully", 200, note);
   } catch (error) {
@@ -195,14 +181,10 @@ export const getNoteByContent = async (req, res) => {
   }
 };
 
+/* ================= NOTES WITH USER ================= */
 export const getNotesWithUser = async (req, res) => {
   try {
-    const userId = req.userId;
-
-    const notes = await NotesModel.find({ userId })
-      .select("title userId createdAt")
-      .populate("userId", "email");
-
+    const notes = await getNotesWithUserService(req.userId);
     return successResponse(res, "Notes fetched successfully", 200, notes);
   } catch (error) {
     console.error("GET NOTES WITH USER ERROR 👉", error);
@@ -210,41 +192,13 @@ export const getNotesWithUser = async (req, res) => {
   }
 };
 
+/* ================= AGGREGATION ================= */
 export const getNotesAggregate = async (req, res) => {
   try {
-    const userId = new mongoose.Types.ObjectId(req.userId);
-    const { title } = req.query;
-
-    const pipeline = [{ $match: { userId } }];
-
-    if (title) {
-      pipeline.push({
-        $match: { title: { $regex: title, $options: "i" } },
-      });
-    }
-
-    pipeline.push(
-      {
-        $lookup: {
-          from: "users",
-          localField: "userId",
-          foreignField: "_id",
-          as: "user",
-        },
-      },
-      { $unwind: "$user" },
-      {
-        $project: {
-          title: 1,
-          content: 1,
-          createdAt: 1,
-          "user.name": 1,
-          "user.email": 1,
-        },
-      },
-    );
-
-    const notes = await NotesModel.aggregate(pipeline);
+    const notes = await getNotesAggregateService({
+      userId: req.userId,
+      title: req.query.title,
+    });
 
     return successResponse(res, "Notes fetched successfully", 200, notes);
   } catch (error) {
@@ -253,11 +207,10 @@ export const getNotesAggregate = async (req, res) => {
   }
 };
 
+/* ================= DELETE ALL ================= */
 export const deleteAllNotes = async (req, res) => {
   try {
-    const userId = req.userId;
-
-    const result = await NotesModel.deleteMany({ userId });
+    const result = await deleteAllNotesService(req.userId);
 
     return successResponse(res, "All notes deleted successfully", 200, {
       deletedCount: result.deletedCount,
